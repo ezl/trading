@@ -3,6 +3,7 @@ import time
 import sqlite3
 import numpy as np
 import pylab
+from scipy.signal import lfilter
 
 def open_db():
     databasename = 'occDB.sqlite3'
@@ -26,7 +27,7 @@ if __name__ == "__main__":
 
     startdate = datetime.date(2009,1,10)
     enddate = datetime.date(2010,1,13)
-    underlying = 'XLF'
+    underlying = 'QQQQ'
     query_params = {'startdate':startdate, 'enddate':enddate, 'underlying':underlying,
                     'exchange':''}
     exchange_list = get_exchanges(query_params)
@@ -55,9 +56,6 @@ if __name__ == "__main__":
         cur.execute(sql % query_params)
         result = cur.fetchall()
         print "%s len(result): %s" % (exchange, str(len(result)))
-        print result
-        print "*" * 30
-        print
         raw = np.array(result)
         volume_data[exchange] = {}
         volume_data[exchange]['quantity'] = raw[:,-1]
@@ -72,14 +70,19 @@ if __name__ == "__main__":
     # Percentages
     print exchange_list
     print volume_data['TOTAL']['date']
-
     for exchange in exchange_list:
         volume_data[exchange]['percent'] = volume_data[exchange]['quantity'] / volume_data['TOTAL']['quantity']
-        print volume_data[exchange]['percent']
+
+    window = 10
+    for exchange in exchange_list:
+        volume_data[exchange]['percent_moving_average'] = lfilter(np.ones(window), window, volume_data[exchange]['percent'])
 
     for exchange in exchange_list:
-        pylab.plot(volume_data[exchange]['date'], volume_data[exchange]['percent'], label=exchange)
-    pylab.legend()
+        pylab.plot(volume_data[exchange]['date'], volume_data[exchange]['percent_moving_average'], label=exchange)
+        pylab.legend()
+        pylab.xlabel('Date')
+        pylab.ylabel('%s-day Weighted Average Percent Volume' % window)
+        pylab.title(underlying)
     pylab.show()
 
 
