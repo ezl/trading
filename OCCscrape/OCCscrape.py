@@ -12,7 +12,7 @@ def open_db():
 
 def create_table_if_not_exists(conn):
     sql = """CREATE TABLE IF NOT EXISTS occ (
-                    quantity int,
+                    quantity INTEGER,
                     underlying VARCHAR,
                     symbol VARCHAR,
                     actype VARCHAR,
@@ -55,6 +55,7 @@ def insert_csv_to_sqlite3(conn, content):
 def bulk_grab_occ_data(symbol_list, date_list):
     for symbol in symbol_list:
         for date in date_list:
+            time.sleep(0.5)
             csv =  query_occ(symbol, date.strftime("%m-%d-%Y"))
             insert_csv_to_sqlite3(conn, csv)
 
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     day = datetime.timedelta(days=1)
     query_duration = 365 * 1
     date_list = [today - n*day for n in range(query_duration)]
-    symbol_list = ['XLF','FAS','FAZ']
+    symbol_list = ['XLF','FAS','FAZ','UYG','SKF','QQQQ','SPY','NDX']
 
     bulk_grab_occ_data(symbol_list=symbol_list, date_list=date_list)
     conn.commit() # close db

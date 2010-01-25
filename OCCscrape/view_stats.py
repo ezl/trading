@@ -9,69 +9,78 @@ def open_db():
     conn = sqlite3.connect(databasename)
     return conn
 
-if __name__ == "__main__":
-    symbol = 'XLF'
-    conn = open_db()
-    today = datetime.date.today()
-    day = datetime.timedelta(days=1)
-    cur = conn.cursor()
-
-    startdate = today - 10 * day
-    enddate = today - 5 * day
-    startdate = datetime.date(2009,1,15)
-    enddate = datetime.date(2010,2,15)
-    symbol = symbol
-    query_params = {'startdate':startdate, 'enddate':enddate, 'symbol':symbol,
-                    'exchange':''}
-
-    def get_exchanges(query_params):
-        sql = """SELECT DISTINCT exchange
-                 FROM occ
-                 WHERE actdate > '%(startdate)s' AND
-                       actdate < '%(enddate)s' AND
-                       symbol LIKE '%(symbol)s'
-                """
-        cur.execute(sql % query_params)
-        result = cur.fetchall()
-        return [r[0] for r in result]
-
-    exchange_list = get_exchanges(query_params)
-
-    sql = """SELECT actdate, exchange, sum(quantity)
+def get_exchanges(query_params):
+    sql = """SELECT DISTINCT exchange
              FROM occ
              WHERE actdate > '%(startdate)s' AND
                    actdate < '%(enddate)s' AND
-                   symbol LIKE '%(symbol)s' AND
-                   exchange LIKE '%(exchange)s'
-             GROUP BY actdate
-             ORDER BY actdate
+                   underlying LIKE '%(underlying)s'
+            """
+    cur.execute(sql % query_params)
+    result = cur.fetchall()
+    return [r[0] for r in result]
+
+if __name__ == "__main__":
+    conn = open_db()
+    cur = conn.cursor()
+
+    startdate = datetime.date(2009,1,10)
+    enddate = datetime.date(2010,1,13)
+    underlying = 'XLF'
+    query_params = {'startdate':startdate, 'enddate':enddate, 'underlying':underlying,
+                    'exchange':''}
+    exchange_list = get_exchanges(query_params)
+
+    sql = """SELECT date.actdate, volume.sum FROM
+                 (SELECT DISTINCT actdate
+                  FROM occ
+                  WHERE actdate >= '%(startdate)s' AND
+                      actdate < '%(enddate)s' AND
+                      underlying LIKE '%(underlying)s') as date
+             LEFT OUTER JOIN
+                 (SELECT actdate, sum(quantity) as sum
+                  FROM occ
+                  WHERE actdate >= '%(startdate)s' AND
+                        actdate < '%(enddate)s' AND
+                        underlying LIKE '%(underlying)s' AND
+                        exchange LIKE '%(exchange)s'
+                  GROUP BY actdate
+                  ORDER BY actdate) as volume
+             ON date.actdate=volume.actdate
              """
+
     volume_data = {}
     for exchange in exchange_list:
         query_params['exchange'] = exchange
         cur.execute(sql % query_params)
         result = cur.fetchall()
-        print "len(result):", len(result)
+        print "%s len(result): %s" % (exchange, str(len(result)))
+        print result
+        print "*" * 30
+        print
         raw = np.array(result)
         volume_data[exchange] = {}
         volume_data[exchange]['quantity'] = raw[:,-1]
+        volume_data[exchange]['quantity'] = np.array([float(i or 0) for i in
+                                            volume_data[exchange]['quantity']])
         volume_data[exchange]['date'] = [datetime.date(*time.strptime(r, "%Y-%m-%d")[:3]) for r in raw[:,0]]
 
-    
+    volume_data['TOTAL'] = {}
+    volume_data['TOTAL']['date'] = volume_data['ISE']['date']
+    volume_data['TOTAL']['quantity'] = sum(np.array([volume_data[exchange]['quantity'] for exchange in exchange_list]))
+
+    # Percentages
+    print exchange_list
+    print volume_data['TOTAL']['date']
+
     for exchange in exchange_list:
-        pylab.plot(volume_data[exchange]['date'],volume_data[exchange]['quantity'], label=exchange)
+        volume_data[exchange]['percent'] = volume_data[exchange]['quantity'] / volume_data['TOTAL']['quantity']
+        print volume_data[exchange]['percent']
+
+    for exchange in exchange_list:
+        pylab.plot(volume_data[exchange]['date'], volume_data[exchange]['percent'], label=exchange)
     pylab.legend()
     pylab.show()
 
-#    data = {}
-#    labels = ['quantity', 'underlying', 'symbol', 'actype', 'porc',
-#              'exchange', 'actdate']
-#    for i, label in enumerate(labels):
-#        data[label] = raw[:,i]
-#    print data
-#    print "^"*40
-#    print type(data['actdate'][5])
-#    print data['actdate'][5]
-#    print "^"*40
-#    pylab.plot(range(len(data['actdate'])), data['quantity'])
-#    pylab.show()
+
+
